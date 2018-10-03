@@ -11,8 +11,10 @@ idsvmSubnetIpRange="10.9.1.0/24"
 dsvmSize="XS"
 adminUsername="benjguin"
 adminPassword="OVznpwjr88_____"
+artifactsStorageAccount="artifacts$suffix"
+artifactsStorageContainer="artifacts"
 
 # the following values are calculated, as in the ARM template
-maindsvmname="ds$suffix"
-maindsurl="$maindsvmname.$location.cloudapp.azure.com"
+dsvmName="dsvm$suffix"
+dsvmUrl="$dsvmName.$location.cloudapp.azure.com"
 

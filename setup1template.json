@@ -48,8 +48,8 @@
         }
     },
     "variables": {
-        "location": "[parameters('location')",
-        "tshirtSizeXS": {
+        "location": "[parameters('location')]",
+        "tshirtSize_XS": {
             "vmSize": "Standard_B1ms",
             "enableAcceleratedNetworking": false
           },        
@@ -69,13 +69,13 @@
             "vmSize": "Standard_NC24s_v3",
             "enableAcceleratedNetworking": false
           },
-          "dsvmVersion_latest": {
+          "dsvmImageVersion_latest": {
             "publisher": "microsoft-dsvm",
             "offer": "linux-data-science-vm-ubuntu",
             "sku": "linuxdsvmubuntu",
             "version": "latest"  
           },
-          "dsvmVersion_18_09_00": {
+          "dsvmImageVersion_18_09_00": {
             "publisher": "microsoft-dsvm",
             "offer": "linux-data-science-vm-ubuntu",
             "sku": "linuxdsvmubuntu",
@@ -83,7 +83,7 @@
           },
           "dsvmSize": "[variables(concat('tshirtSize_', parameters('tshirtsize'))).vmSize]",
           "dsvmAcceleratedNetworking": "[variables(concat('tshirtSize_', parameters('tshirtsize'))).enableAcceleratedNetworking]",
-          "dsvmImage": "[variables(concat('dsvmVersion_', parameters('dsvmversion')))]",
+          "dsvmImage": "[variables(concat('dsvmImageVersion_', parameters('dsvmVersion')))]",
           "diagsStorageAccountName": "[concat('storage', parameters('uniquesuffix'))]",
           "vnetName": "[concat('vnet', parameters('uniqueSuffix'))]",
           "vNetIpRange": "[parameters('vNetIpRange')]",
@@ -91,9 +91,9 @@
           "idsvmSubnetIpRange": "[parameters('idsvmSubnetIpRange')]",
           "nsgName": "[concat('nsg', parameters('uniqueSuffix'))]",
           "dsvmName": "[concat('dsvm', parameters('uniqueSuffix'))]",
-          "dsvmPublicName": "[variables(dsvmName)]",
-
-          "tbd": 0
+          "dsvmPublicName": "[variables('dsvmName')]",
+          "dsvmAdminUsername": "[parameters('dsvmAdminUsername')]",
+          "dsvmAdminPassword": "[parameters('dsvmAdminPassword')]"
     },
     "resources": [
         {
@@ -145,6 +145,9 @@
                     "addressPrefixes": [
                         "[variables('vNetIpRange')]"
                     ]
+                },
+                "dhcpOptions": {
+                    "dnsServers": []
                 },
                 "subnets": [
                     {
@@ -364,6 +367,48 @@
             "dependsOn": []
         },
         {
+            "comments": "dsvm NIC",
+            "type": "Microsoft.Network/networkInterfaces",
+            "name": "[concat(variables('dsvmName'), '_nic0')]",
+            "apiVersion": "2018-02-01",
+            "location": "[variables('location')]",
+            "tags": {},
+            "scale": null,
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', concat(variables('dsvmName'),'_public_ip'))]"
+                            },
+                            "subnet": {
+                                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), 'default')]"
+                            },
+                            "primary": true,
+                            "privateIPAddressVersion": "IPv4"
+                        }
+                    }
+                ],
+                "dnsSettings": {
+                    "dnsServers": [],
+                    "appliedDnsServers": []
+                },
+                "enableAcceleratedNetworking": "[variables('dsvmAcceleratedNetworking')]",
+                "enableIPForwarding": false,
+                "networkSecurityGroup": {
+                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
+                },
+                "primary": true
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', concat(variables('dsvmName'),'_public_ip'))]",
+                "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+                "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
+            ]
+        },
+        {
             "comments": "the DSVM itself",
             "type": "Microsoft.Compute/virtualMachines",
             "name": "[variables('dsvmName')]",
@@ -388,7 +433,6 @@
                         "createOption": "FromImage",
                         "caching": "ReadWrite",
                         "managedDisk": {
-                            "id": "[concat(variables('dsvmName'),'_OsDisk')]"
                         }
                     },
                     "dataDisks": [
@@ -399,7 +443,6 @@
                             "caching": "None",
                             "writeAcceleratorEnabled": false,
                             "managedDisk": {
-                                "id": "[concat(variables('dsvmName'),'_DataDisk_Lun_0')]"
                             }
                         }
                     ]
@@ -416,7 +459,7 @@
                 "networkProfile": {
                     "networkInterfaces": [
                         {
-                            "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('dsvmName'), '_nic0')]"
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('dsvmName'), '_nic0'))]"
                         }
                     ]
                 },
@@ -427,15 +470,45 @@
                     }
                 }
             },
+            "resources": [
+                {
+                    "apiVersion": "2017-12-01",
+                    "type": "extensions",
+                    "name": "initDsvm",
+                    "location": "[variables('location')]",
+                    "dependsOn": [
+                        "[concat('Microsoft.Compute/virtualMachines/', variables('dsvmName'))]"
+                    ],
+                    "tags": {
+                        "displayName": "initDsvm"
+                    },
+                    "properties": {
+                        "publisher": "Microsoft.Azure.Extensions",
+                        "type": "CustomScript",
+                        "typeHandlerVersion": "2.0",
+                        "autoUpgradeMinorVersion": true,
+                        "settings": {
+                            "fileUris": [
+                                "[concat(variables('initScriptsUrl'), 'jumpbox.sh')]",
+                                "[concat(variables('initScriptsUrl'), 'helperscripts/startnetwork_root.sh')]",
+                                "[concat(variables('initScriptsUrl'), 'helperscripts/setsshkeys_root.sh')]"
+                            ]
+                        },
+                        "protectedSettings": {
+                            "commandToExecute": "[variables('commandOnJumpbox')]"
+                        }
+                    }
+                }
+            ],
             "dependsOn": [
-                "[resourceId('Microsoft.Network/networkInterfaces', variables('dsvmName'), '_nic0'))]",
+                "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('dsvmName'), '_nic0'))]",
                 "[resourceId('Microsoft.Storage/storageAccounts', variables('diagsStorageAccountName'))]"
             ]
         },
         {
             "comments": "Auto-Shutdown",
             "type": "microsoft.devtestlab/schedules",
-            "name": "[parameters('schedules_shutdown_computevm_demouds23_name')]",
+            "name": "[concat('shutdown-computevm-', variables('dsvmName'))]",
             "apiVersion": "2016-05-15",
             "location": "[variables('location')]",
             "tags": {},
@@ -451,52 +524,10 @@
                     "status": "Disabled",
                     "timeInMinutes": 30
                 },
-                "targetResourceId": "[resourceId('Microsoft.Compute/virtualMachines', variables('dsvmName'))]",
+                "targetResourceId": "[resourceId('Microsoft.Compute/virtualMachines', variables('dsvmName'))]"
             },
             "dependsOn": [
                 "[resourceId('Microsoft.Compute/virtualMachines', variables('dsvmName'))]"
-            ]
-        },
-        {
-            "comments": "dsvm NIC",
-            "type": "Microsoft.Network/networkInterfaces",
-            "name": "[concat(variables('dsvmName'), '_nic0')]",
-            "apiVersion": "2018-02-01",
-            "location": "[variables('location')]",
-            "tags": {},
-            "scale": null,
-            "properties": {
-                "ipConfigurations": [
-                    {
-                        "name": "ipconfig1",
-                        "properties": {
-                            "privateIPAllocationMethod": "Dynamic",
-                            "publicIPAddress": {
-                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', concat(variables('dsvmName'),'_public_ip'))]"
-                            },
-                            "subnet": {
-                                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('defaultSubnetIpRange'))]"
-                            },
-                            "primary": true,
-                            "privateIPAddressVersion": "IPv4"
-                        }
-                    }
-                ],
-                "dnsSettings": {
-                    "dnsServers": [],
-                    "appliedDnsServers": []
-                },
-                "enableAcceleratedNetworking": "[variables('dsvmAcceleratedNetworking')]",
-                "enableIPForwarding": false,
-                "networkSecurityGroup": {
-                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
-                },
-                "primary": true
-            },
-            "dependsOn": [
-                "[resourceId('Microsoft.Network/publicIPAddresses', concat(variables('dsvmName'),'_public_ip'))]",
-                "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('defaultSubnetIpRange'))]",
-                "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
             ]
         }
     ]
