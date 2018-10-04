@@ -45,6 +45,12 @@
         },
         "dsvmAdminPassword": {
             "type": "securestring"
+        },
+        "artifactsPrefix": {
+            "type": "string"
+        },
+        "artifactsSuffix": {
+            "type": "string"
         }
     },
     "variables": {
@@ -93,7 +99,9 @@
           "dsvmName": "[concat('dsvm', parameters('uniqueSuffix'))]",
           "dsvmPublicName": "[variables('dsvmName')]",
           "dsvmAdminUsername": "[parameters('dsvmAdminUsername')]",
-          "dsvmAdminPassword": "[parameters('dsvmAdminPassword')]"
+          "dsvmAdminPassword": "[parameters('dsvmAdminPassword')]",
+          "artifactsPrefix": "[parameters('artifactsPrefix')]",
+          "artifactsSuffix": "[parameters('artifactsSuffix')]"
     },
     "resources": [
         {
@@ -489,13 +497,11 @@
                         "autoUpgradeMinorVersion": true,
                         "settings": {
                             "fileUris": [
-                                "[concat(variables('initScriptsUrl'), 'jumpbox.sh')]",
-                                "[concat(variables('initScriptsUrl'), 'helperscripts/startnetwork_root.sh')]",
-                                "[concat(variables('initScriptsUrl'), 'helperscripts/setsshkeys_root.sh')]"
+                                "[concat(variables('artifactsPrefix'), 'sampleScript.sh', variables('artifactsSuffix'))]"
                             ]
                         },
                         "protectedSettings": {
-                            "commandToExecute": "[variables('commandOnJumpbox')]"
+                            "commandToExecute": "./sampleScript.sh"
                         }
                     }
                 }

@@ -44,19 +44,22 @@ else
 	echo "Using existing container \"$artifactsStorageContainer\""
 fi
 
-az storage blob upload-batch --destination $artifactsStorageContainer --source "$DIR/setup1artifacts/" --account-name $artifactsStorageAccount
+az storage blob upload-batch --destination $artifactsStorageContainer --source "$DIR/artifacts/" --account-name $artifactsStorageAccount
 
-az storage container policy create --name "readonly" --container-name $artifactsStorageContainer --account-name $artifactsStorageAccount
-az storage container generate-sas --name $artifactsStorageContainer --account-name $artifactsStorageAccount XXX
+policyExpirationYear=$((`date +%Y`+2))
+policyExpirationDateTime="$policyExpirationYear-`date +%m-%d`T23:59:59Z"
+az storage container policy create --name "artifactsreadonly" --container-name "$artifactsStorageContainer" --account-name "$artifactsStorageAccount" --expiry "$policyExpirationDateTime" --permissions "r"
+artifactsSas=`az storage container generate-sas --name $artifactsStorageContainer --account-name $artifactsStorageAccount --policy-name "artifactsreadonly" --output tsv`
+artifactsPrefix="https://${artifactsStorageAccount}.blob.core.windows.net/${artifactsStorageContainer}/"
+artifactsSuffix="?${artifactsSas}"
 
-
-deploymentName="setup1_starting_`date +%y%m%d_%HH%MM%SS.%N`"
+deploymentName="setup_starting_`date +%y%m%d_%HH%MM%SS.%N`"
 
 #Start deployment
 echo "Starting deployment \"$deploymentName\" ..."
 
-az group deployment create --debug --name "$deploymentName" --resource-group "$rg" \
-	--template-file "$DIR/setup1template.json" \
+az group deployment create --name "$deploymentName" --resource-group "$rg" \
+	--template-file "$DIR/template.json" \
 	--parameters uniquesuffix="$suffix" \
 	--parameters tshirtSize="$dsvmSize" \
 	--parameters location="$location" \
@@ -64,8 +67,9 @@ az group deployment create --debug --name "$deploymentName" --resource-group "$r
 	--parameters defaultSubnetIpRange="$defaultSubnetIpRange" \
 	--parameters idsvmSubnetIpRange="$idsvmSubnetIpRange" \
 	--parameters dsvmAdminUsername="$adminUsername" \
-	--parameters dsvmAdminPassword="$adminPassword"
-#--parameters "@{$DIR/setup1parameters.json}"
+	--parameters dsvmAdminPassword="$adminPassword" \
+	--parameters artifactsPrefix="$artifactsPrefix" \
+	--parameters artifactsSuffix="$artifactsSuffix"
 
 if [ $?  == 0 ];
 then
@@ -74,3 +78,5 @@ else
 	echo "Template was NOT successfully deployed"
 	exit 1
 fi
+
+echo "you should be able to ssh to ${adminUsername}@${dsvmUrl}"
