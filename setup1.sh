@@ -6,7 +6,8 @@ source $DIR/initAzAndMisc.sh
 
 az group deployment create --name "$deploymentName" --resource-group "$rg" \
 	--template-file "$DIR/template.json" \
-	--parameters uniquesuffix="$suffix" \
+	--parameters uniqueSuffix="$suffix" \
+	--parameters vmSuffix="$suffix" \
 	--parameters tshirtSize="$dsvmSize" \
 	--parameters location="$location" \
 	--parameters vNetIpRange="$vNetIpRange" \

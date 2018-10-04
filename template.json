@@ -2,9 +2,13 @@
     "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "uniquesuffix": {
+        "uniqueSuffix": {
             "type": "string",
-            "defaultValue": "[uniquestring(resourceGroup().id, 'uniquesuffix')]"
+            "defaultValue": "[uniquestring(resourceGroup().id, 'uniqueSuffix')]"
+        },
+        "vmSuffix": {
+            "type": "string",
+            "defaultValue": "[uniquestring(resourceGroup().id, 'vmSuffix')]"
         },
         "tshirtSize": {
             "type": "string",
@@ -109,13 +113,13 @@
         "dsvmSize": "[variables(concat('tshirtSize_', parameters('tshirtsize'))).vmSize]",
         "dsvmAcceleratedNetworking": "[variables(concat('tshirtSize_', parameters('tshirtsize'))).enableAcceleratedNetworking]",
         "dsvmImage": "[variables(concat('dsvmImageVersion_', parameters('dsvmVersion')))]",
-        "diagsStorageAccountName": "[concat('storage', parameters('uniquesuffix'))]",
+        "diagsStorageAccountName": "[concat('storage', parameters('uniqueSuffix'))]",
         "vnetName": "[concat('vnet', parameters('uniqueSuffix'))]",
         "vNetIpRange": "[parameters('vNetIpRange')]",
         "defaultSubnetIpRange": "[parameters('defaultSubnetIpRange')]",
         "idsvmSubnetIpRange": "[parameters('idsvmSubnetIpRange')]",
         "nsgName": "[concat('nsg', parameters('uniqueSuffix'))]",
-        "dsvmName": "[concat('dsvm', parameters('uniqueSuffix'))]",
+        "dsvmName": "[concat('dsvm', parameters('vmSuffix'))]",
         "dsvmAdminUsername": "[parameters('dsvmAdminUsername')]",
         "dsvmAdminPassword": "[parameters('dsvmAdminPassword')]",
         "artifactsPrefix": "[parameters('artifactsPrefix')]",
@@ -375,7 +379,7 @@
         {
             "comments": "VM or VMs themselves",
             "type": "Microsoft.Resources/deployments",
-            "name": "VMs",
+            "name": "[concat('VMs', copyIndex())]",
             "apiVersion": "2015-01-01",
             "properties": {
                     "mode": "Incremental",
@@ -416,6 +420,12 @@
                     },
                     "diagsStorageAccountName": {
                         "value": "[variables('diagsStorageAccountName')]"
+                    },
+                    "vnetName": {
+                        "value": "[variables('vnetName')]"
+                    },
+                    "nsgName": {
+                        "value": "[variables('nsgName')]"
                     }
                 }
             },

@@ -11,7 +11,8 @@ source $DIR/initAzAndMisc.sh
 
 az group deployment create --name "$deploymentName" --resource-group "$rg" \
 	--template-file "$DIR/template.json" \
-	--parameters uniquesuffix="$suffixForAdditionalVMs" \
+	--parameters uniqueSuffix="$suffix" \
+	--parameters vmSuffix="$suffixForAdditionalVMs" \
 	--parameters tshirtSize="$dsvmSize" \
 	--parameters location="$location" \
 	--parameters vNetIpRange="$vNetIpRange" \
@@ -22,6 +23,6 @@ az group deployment create --name "$deploymentName" --resource-group "$rg" \
 	--parameters artifactsPrefix="$artifactsPrefix" \
 	--parameters artifactsSuffix="$artifactsSuffix" \
 	--parameters nbVMs=$nbAdditionalVMs \
-	--parameters typeOfVM="mainDSVM"
+	--parameters typeOfVM="individualDSVM"
 
 source $DIR/endOfScripts.sh

@@ -32,7 +32,7 @@
             "type": "string"
         },
         "dsvmAcceleratedNetworking": {
-            "type": "string"
+            "type": "bool"
         },
         "dsvmImage": {
             "type": "object"

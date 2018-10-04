@@ -15,12 +15,12 @@ Here is an example on how to use it.
 3/ deploy 2 additional VMs
 
 ```bash
-./setup2.sh 2 "grp1-"
+./setup2.sh 2 "grpone"
 ```
 
 
 4/ deploy 1 additional VMs
 
 ```bash
-./setup2.sh 1 "grp2-"
+./setup2.sh 1 "grptwo"
 ```
