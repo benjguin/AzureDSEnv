@@ -1,0 +1,250 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]"
+        },
+        "dsvmAdminUsername": {
+            "type": "string",
+            "defaultValue": "dsvmadmin"
+        },
+        "dsvmAdminPassword": {
+            "type": "securestring"
+        },
+        "artifactsPrefix": {
+            "type": "string"
+        },
+        "artifactsSuffix": {
+            "type": "string"
+        },
+        "vmNumber": {
+            "type": "int",
+            "minValue": 0,
+            "maxValue": 100,
+            "defaultValue": 0
+        },
+        "dsvmName": {
+            "type": "string"
+        },
+        "dsvmSize": {
+            "type": "string"
+        },
+        "dsvmAcceleratedNetworking": {
+            "type": "string"
+        },
+        "dsvmImage": {
+            "type": "object"
+        },
+        "diagsStorageAccountName": {
+            "type": "string"
+        },
+        "vnetName": {
+            "type": "string"
+        },
+        "nsgName": {
+            "type": "string"
+        }
+    },
+    "variables": {
+        "location": "[parameters('location')]",
+        "dsvmAdminUsername": "[parameters('dsvmAdminUsername')]",
+        "dsvmAdminPassword": "[parameters('dsvmAdminPassword')]",
+        "artifactsPrefix": "[parameters('artifactsPrefix')]",
+        "artifactsSuffix": "[parameters('artifactsSuffix')]",
+        "vmNumber": "[parameters('vmNumber')]",
+        "dsvmName": "[concat(parameters('dsvmName'), variables('vmNumber'))]",
+        "dsvmPublicName": "[variables('dsvmName')]",
+        "dsvmSize": "[parameters('dsvmSize')]",
+        "dsvmAcceleratedNetworking": "[parameters('dsvmAcceleratedNetworking')]",
+        "dsvmImage": "[parameters('dsvmImage')]",
+        "diagsStorageAccountName": "[parameters('diagsStorageAccountName')]",
+        "vnetName": "[parameters('vnetName')]",
+        "subnet": "idsvm",
+        "nsgName": "[parameters('nsgName')]"
+    },
+    "resources": [
+        {
+            "comments": "DSVM public IP address",
+            "type": "Microsoft.Network/publicIPAddresses",
+            "sku": {
+                "name": "Basic",
+                "tier": "Regional"
+            },
+            "name": "[concat(variables('dsvmName'),'_public_ip')]",
+            "apiVersion": "2018-02-01",
+            "location": "[variables('location')]",
+            "scale": null,
+            "properties": {
+                "publicIPAddressVersion": "IPv4",
+                "publicIPAllocationMethod": "Dynamic",
+                "idleTimeoutInMinutes": 4,
+                "dnsSettings": {
+                    "domainNameLabel": "[variables('dsvmPublicName')]"
+                },
+                "ipTags": []
+            },
+            "dependsOn": []
+        },
+        {
+            "comments": "dsvm NIC",
+            "type": "Microsoft.Network/networkInterfaces",
+            "name": "[concat(variables('dsvmName'), '_nic0')]",
+            "apiVersion": "2018-02-01",
+            "location": "[variables('location')]",
+            "tags": {},
+            "scale": null,
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', concat(variables('dsvmName'),'_public_ip'))]"
+                            },
+                            "subnet": {
+                                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), variables('subnet'))]"
+                            },
+                            "primary": true,
+                            "privateIPAddressVersion": "IPv4"
+                        }
+                    }
+                ],
+                "dnsSettings": {
+                    "dnsServers": [],
+                    "appliedDnsServers": []
+                },
+                "enableAcceleratedNetworking": "[variables('dsvmAcceleratedNetworking')]",
+                "enableIPForwarding": false,
+                "networkSecurityGroup": {
+                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
+                },
+                "primary": true
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', concat(variables('dsvmName'),'_public_ip'))]"
+            ]
+        },
+        {
+            "comments": "the DSVM itself",
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[variables('dsvmName')]",
+            "apiVersion": "2017-12-01",
+            "location": "[variables('location')]",
+            "tags": {},
+            "scale": null,
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[variables('dsvmSize')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('dsvmImage').publisher]",
+                        "offer": "[variables('dsvmImage').offer]",
+                        "sku": "[variables('dsvmImage').sku]",
+                        "version": "[variables('dsvmImage').version]"
+                    },
+                    "osDisk": {
+                        "osType": "Linux",
+                        "name": "[concat(variables('dsvmName'),'_OsDisk')]",
+                        "createOption": "FromImage",
+                        "caching": "ReadWrite",
+                        "managedDisk": {
+                        }
+                    },
+                    "dataDisks": [
+                        {
+                            "lun": 0,
+                            "name": "[concat(variables('dsvmName'),'_DataDisk_Lun_0')]",
+                            "createOption": "FromImage",
+                            "caching": "None",
+                            "writeAcceleratorEnabled": false,
+                            "managedDisk": {
+                            }
+                        }
+                    ]
+                },
+                "osProfile": {
+                    "computerName": "[variables('dsvmName')]",
+                    "adminUsername": "[variables('dsvmAdminUsername')]",
+                    "adminPassword": "[variables('dsvmAdminPassword')]",
+                    "linuxConfiguration": {
+                        "disablePasswordAuthentication": false
+                    },
+                    "secrets": []
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('dsvmName'), '_nic0'))]"
+                        }
+                    ]
+                },
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": true,
+                        "storageUri": "[concat('https', '://', variables('diagsStorageAccountName'), '.blob.core.windows.net', '/')]"
+                    }
+                }
+            },
+            "resources": [
+                {
+                    "apiVersion": "2017-12-01",
+                    "type": "extensions",
+                    "name": "initDsvm",
+                    "location": "[variables('location')]",
+                    "dependsOn": [
+                        "[concat('Microsoft.Compute/virtualMachines/', variables('dsvmName'))]"
+                    ],
+                    "tags": {
+                        "displayName": "initDsvm"
+                    },
+                    "properties": {
+                        "publisher": "Microsoft.Azure.Extensions",
+                        "type": "CustomScript",
+                        "typeHandlerVersion": "2.0",
+                        "autoUpgradeMinorVersion": true,
+                        "settings": {
+                            "fileUris": [
+                                "[concat(variables('artifactsPrefix'), 'sampleScript.sh', variables('artifactsSuffix'))]"
+                            ]
+                        },
+                        "protectedSettings": {
+                            "commandToExecute": "./sampleScript.sh"
+                        }
+                    }
+                }
+            ],
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('dsvmName'), '_nic0'))]"
+            ]
+        },
+        {
+            "comments": "Auto-Shutdown",
+            "type": "microsoft.devtestlab/schedules",
+            "name": "[concat('shutdown-computevm-', variables('dsvmName'))]",
+            "apiVersion": "2016-05-15",
+            "location": "[variables('location')]",
+            "tags": {},
+            "scale": null,
+            "properties": {
+                "status": "Enabled",
+                "taskType": "ComputeVmShutdownTask",
+                "dailyRecurrence": {
+                    "time": "0000"
+                },
+                "timeZoneId": "UTC",
+                "notificationSettings": {
+                    "status": "Disabled",
+                    "timeInMinutes": 30
+                },
+                "targetResourceId": "[resourceId('Microsoft.Compute/virtualMachines', variables('dsvmName'))]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines', variables('dsvmName'))]"
+            ]
+        }
+    ]
+}
