@@ -1,0 +1,540 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "uniquesuffix": {
+            "type": "string",
+            "defaultValue": "[uniquestring(resourceGroup().id, 'uniquesuffix')]"
+        },
+        "tshirtSize": {
+            "type": "string",
+            "defaultValue": "M",
+            "allowedValues": [
+                "XS", "S", "M", "L", "XL"
+            ],
+            "metadata": {
+                "description": "T-shirt size of the Data Science VM"
+            }
+        },
+        "dsvmVersion": {
+            "type": "string",
+            "defaultValue": "latest",
+            "allowedValues": [
+                "latest", "18_09_00"
+            ]
+        },
+        "location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]"
+        },
+        "vNetIpRange": {
+            "type": "string",
+            "defaultValue": "10.0.0.0/16"
+        },
+        "defaultSubnetIpRange": {
+            "type": "string",
+            "defaultValue": "10.0.0.0/24"
+        },
+        "idsvmSubnetIpRange": {
+            "type": "string",
+            "defaultValue": "10.0.1.0/24"
+        },
+        "dsvmAdminUsername": {
+            "type": "string",
+            "defaultValue": "dsvmadmin"
+        },
+        "dsvmAdminPassword": {
+            "type": "securestring"
+        },
+        "artifactsPrefix": {
+            "type": "string"
+        },
+        "artifactsSuffix": {
+            "type": "string"
+        }
+    },
+    "variables": {
+        "location": "[parameters('location')]",
+        "tshirtSize_XS": {
+            "vmSize": "Standard_B1ms",
+            "enableAcceleratedNetworking": false
+          },        
+        "tshirtSize_S": {
+            "vmSize": "Standard_B2ms",
+            "enableAcceleratedNetworking": false
+          },        
+          "tshirtSize_M": {
+            "vmSize": "Standard_D4s_v3",
+            "enableAcceleratedNetworking": true
+          },        
+          "tshirtSize_L": {
+            "vmSize": "Standard_NC6s_v3",
+            "enableAcceleratedNetworking": true
+          },        
+          "tshirtSize_XL": {
+            "vmSize": "Standard_NC24s_v3",
+            "enableAcceleratedNetworking": false
+          },
+          "dsvmImageVersion_latest": {
+            "publisher": "microsoft-dsvm",
+            "offer": "linux-data-science-vm-ubuntu",
+            "sku": "linuxdsvmubuntu",
+            "version": "latest"  
+          },
+          "dsvmImageVersion_18_09_00": {
+            "publisher": "microsoft-dsvm",
+            "offer": "linux-data-science-vm-ubuntu",
+            "sku": "linuxdsvmubuntu",
+            "version": "18.09.00"  
+          },
+          "dsvmSize": "[variables(concat('tshirtSize_', parameters('tshirtsize'))).vmSize]",
+          "dsvmAcceleratedNetworking": "[variables(concat('tshirtSize_', parameters('tshirtsize'))).enableAcceleratedNetworking]",
+          "dsvmImage": "[variables(concat('dsvmImageVersion_', parameters('dsvmVersion')))]",
+          "diagsStorageAccountName": "[concat('storage', parameters('uniquesuffix'))]",
+          "vnetName": "[concat('vnet', parameters('uniqueSuffix'))]",
+          "vNetIpRange": "[parameters('vNetIpRange')]",
+          "defaultSubnetIpRange": "[parameters('defaultSubnetIpRange')]",
+          "idsvmSubnetIpRange": "[parameters('idsvmSubnetIpRange')]",
+          "nsgName": "[concat('nsg', parameters('uniqueSuffix'))]",
+          "dsvmName": "[concat('dsvm', parameters('uniqueSuffix'))]",
+          "dsvmPublicName": "[variables('dsvmName')]",
+          "dsvmAdminUsername": "[parameters('dsvmAdminUsername')]",
+          "dsvmAdminPassword": "[parameters('dsvmAdminPassword')]",
+          "artifactsPrefix": "[parameters('artifactsPrefix')]",
+          "artifactsSuffix": "[parameters('artifactsSuffix')]"
+    },
+    "resources": [
+        {
+            "comments": "diagnostics storage'.",
+            "type": "Microsoft.Storage/storageAccounts",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },        
+            "kind": "StorageV2",
+            "name": "[variables('diagsStorageAccountName')]",
+            "apiVersion": "2017-10-01",
+            "location": "[variables('location')]",
+            "tags": {},
+            "scale": null,
+            "properties": {
+                "networkAcls": {
+                    "bypass": "AzureServices",
+                    "virtualNetworkRules": [],
+                    "ipRules": [],
+                    "defaultAction": "Allow"
+                },
+                "supportsHttpsTrafficOnly": false,
+                "encryption": {
+                    "services": {
+                        "file": {
+                            "enabled": true
+                        },
+                        "blob": {
+                            "enabled": true
+                        }
+                    },
+                    "keySource": "Microsoft.Storage"
+                },
+                "accessTier": "Hot"
+            },
+            "dependsOn": []
+        },
+        {
+            "comments": "VNET",
+            "type": "Microsoft.Network/virtualNetworks",
+            "name": "[variables('vnetName')]",
+            "apiVersion": "2018-02-01",
+            "location": "[variables('location')]",
+            "tags": {},
+            "scale": null,
+            "properties": {
+                "addressSpace": {
+                    "addressPrefixes": [
+                        "[variables('vNetIpRange')]"
+                    ]
+                },
+                "dhcpOptions": {
+                    "dnsServers": []
+                },
+                "subnets": [
+                    {
+                        "name": "default",
+                        "properties": {
+                            "addressPrefix": "[variables('defaultSubnetIpRange')]"
+                        }
+                    },
+                    {
+                        "name": "idsvm",
+                        "properties": {
+                            "addressPrefix": "[variables('idsvmSubnetIpRange')]"
+                        }
+                    }
+                ],
+                "virtualNetworkPeerings": [],
+                "enableDdosProtection": false,
+                "enableVmProtection": false
+            },
+            "dependsOn": []
+        },
+        {
+            "comments": "NSG",
+            "type": "Microsoft.Network/networkSecurityGroups",
+            "name": "[variables('nsgName')]",
+            "apiVersion": "2018-02-01",
+            "location": "[variables('location')]",
+            "tags": {},
+            "scale": null,
+            "properties": {
+                "securityRules": [
+                    {
+                        "name": "JupyterHub",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "8000",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 1010,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "RStudio_Server",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "8787",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 1020,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "SSH",
+                        "properties": {
+                            "protocol": "Tcp",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "22",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 1030,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    }
+                ],
+                "defaultSecurityRules": [
+                    {
+                        "name": "AllowVnetInBound",
+                        "properties": {
+                            "description": "Allow inbound traffic from all VMs in VNET",
+                            "protocol": "*",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "*",
+                            "sourceAddressPrefix": "VirtualNetwork",
+                            "destinationAddressPrefix": "VirtualNetwork",
+                            "access": "Allow",
+                            "priority": 65000,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "AllowAzureLoadBalancerInBound",
+                        "properties": {
+                            "description": "Allow inbound traffic from azure load balancer",
+                            "protocol": "*",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "*",
+                            "sourceAddressPrefix": "AzureLoadBalancer",
+                            "destinationAddressPrefix": "*",
+                            "access": "Allow",
+                            "priority": 65001,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "DenyAllInBound",
+                        "properties": {
+                            "description": "Deny all inbound traffic",
+                            "protocol": "*",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "*",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Deny",
+                            "priority": 65500,
+                            "direction": "Inbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "AllowVnetOutBound",
+                        "properties": {
+                            "description": "Allow outbound traffic from all VMs to all VMs in VNET",
+                            "protocol": "*",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "*",
+                            "sourceAddressPrefix": "VirtualNetwork",
+                            "destinationAddressPrefix": "VirtualNetwork",
+                            "access": "Allow",
+                            "priority": 65000,
+                            "direction": "Outbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "AllowInternetOutBound",
+                        "properties": {
+                            "description": "Allow outbound traffic from all VMs to Internet",
+                            "protocol": "*",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "*",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "Internet",
+                            "access": "Allow",
+                            "priority": 65001,
+                            "direction": "Outbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    },
+                    {
+                        "name": "DenyAllOutBound",
+                        "properties": {
+                            "description": "Deny all outbound traffic",
+                            "protocol": "*",
+                            "sourcePortRange": "*",
+                            "destinationPortRange": "*",
+                            "sourceAddressPrefix": "*",
+                            "destinationAddressPrefix": "*",
+                            "access": "Deny",
+                            "priority": 65500,
+                            "direction": "Outbound",
+                            "sourcePortRanges": [],
+                            "destinationPortRanges": [],
+                            "sourceAddressPrefixes": [],
+                            "destinationAddressPrefixes": []
+                        }
+                    }
+                ]
+            },
+            "dependsOn": []
+        },
+        {
+            "comments": "DSVM public IP address",
+            "type": "Microsoft.Network/publicIPAddresses",
+            "sku": {
+                "name": "Basic",
+                "tier": "Regional"
+            },
+            "name": "[concat(variables('dsvmName'),'_public_ip')]",
+            "apiVersion": "2018-02-01",
+            "location": "[variables('location')]",
+            "scale": null,
+            "properties": {
+                "publicIPAddressVersion": "IPv4",
+                "publicIPAllocationMethod": "Dynamic",
+                "idleTimeoutInMinutes": 4,
+                "dnsSettings": {
+                    "domainNameLabel": "[variables('dsvmPublicName')]"
+                },
+                "ipTags": []
+            },
+            "dependsOn": []
+        },
+        {
+            "comments": "dsvm NIC",
+            "type": "Microsoft.Network/networkInterfaces",
+            "name": "[concat(variables('dsvmName'), '_nic0')]",
+            "apiVersion": "2018-02-01",
+            "location": "[variables('location')]",
+            "tags": {},
+            "scale": null,
+            "properties": {
+                "ipConfigurations": [
+                    {
+                        "name": "ipconfig1",
+                        "properties": {
+                            "privateIPAllocationMethod": "Dynamic",
+                            "publicIPAddress": {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses', concat(variables('dsvmName'),'_public_ip'))]"
+                            },
+                            "subnet": {
+                                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('vnetName'), 'default')]"
+                            },
+                            "primary": true,
+                            "privateIPAddressVersion": "IPv4"
+                        }
+                    }
+                ],
+                "dnsSettings": {
+                    "dnsServers": [],
+                    "appliedDnsServers": []
+                },
+                "enableAcceleratedNetworking": "[variables('dsvmAcceleratedNetworking')]",
+                "enableIPForwarding": false,
+                "networkSecurityGroup": {
+                    "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
+                },
+                "primary": true
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', concat(variables('dsvmName'),'_public_ip'))]",
+                "[resourceId('Microsoft.Network/virtualNetworks', variables('vnetName'))]",
+                "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgName'))]"
+            ]
+        },
+        {
+            "comments": "the DSVM itself",
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[variables('dsvmName')]",
+            "apiVersion": "2017-12-01",
+            "location": "[variables('location')]",
+            "tags": {},
+            "scale": null,
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[variables('dsvmSize')]"
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('dsvmImage').publisher]",
+                        "offer": "[variables('dsvmImage').offer]",
+                        "sku": "[variables('dsvmImage').sku]",
+                        "version": "[variables('dsvmImage').version]"
+                    },
+                    "osDisk": {
+                        "osType": "Linux",
+                        "name": "[concat(variables('dsvmName'),'_OsDisk')]",
+                        "createOption": "FromImage",
+                        "caching": "ReadWrite",
+                        "managedDisk": {
+                        }
+                    },
+                    "dataDisks": [
+                        {
+                            "lun": 0,
+                            "name": "[concat(variables('dsvmName'),'_DataDisk_Lun_0')]",
+                            "createOption": "FromImage",
+                            "caching": "None",
+                            "writeAcceleratorEnabled": false,
+                            "managedDisk": {
+                            }
+                        }
+                    ]
+                },
+                "osProfile": {
+                    "computerName": "[variables('dsvmName')]",
+                    "adminUsername": "[variables('dsvmAdminUsername')]",
+                    "adminPassword": "[variables('dsvmAdminPassword')]",
+                    "linuxConfiguration": {
+                        "disablePasswordAuthentication": false
+                    },
+                    "secrets": []
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('dsvmName'), '_nic0'))]"
+                        }
+                    ]
+                },
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": true,
+                        "storageUri": "[concat('https', '://', variables('diagsStorageAccountName'), '.blob.core.windows.net', '/')]"
+                    }
+                }
+            },
+            "resources": [
+                {
+                    "apiVersion": "2017-12-01",
+                    "type": "extensions",
+                    "name": "initDsvm",
+                    "location": "[variables('location')]",
+                    "dependsOn": [
+                        "[concat('Microsoft.Compute/virtualMachines/', variables('dsvmName'))]"
+                    ],
+                    "tags": {
+                        "displayName": "initDsvm"
+                    },
+                    "properties": {
+                        "publisher": "Microsoft.Azure.Extensions",
+                        "type": "CustomScript",
+                        "typeHandlerVersion": "2.0",
+                        "autoUpgradeMinorVersion": true,
+                        "settings": {
+                            "fileUris": [
+                                "[concat(variables('artifactsPrefix'), 'sampleScript.sh', variables('artifactsSuffix'))]"
+                            ]
+                        },
+                        "protectedSettings": {
+                            "commandToExecute": "./sampleScript.sh"
+                        }
+                    }
+                }
+            ],
+            "dependsOn": [
+                "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('dsvmName'), '_nic0'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('diagsStorageAccountName'))]"
+            ]
+        },
+        {
+            "comments": "Auto-Shutdown",
+            "type": "microsoft.devtestlab/schedules",
+            "name": "[concat('shutdown-computevm-', variables('dsvmName'))]",
+            "apiVersion": "2016-05-15",
+            "location": "[variables('location')]",
+            "tags": {},
+            "scale": null,
+            "properties": {
+                "status": "Enabled",
+                "taskType": "ComputeVmShutdownTask",
+                "dailyRecurrence": {
+                    "time": "0000"
+                },
+                "timeZoneId": "UTC",
+                "notificationSettings": {
+                    "status": "Disabled",
+                    "timeInMinutes": 30
+                },
+                "targetResourceId": "[resourceId('Microsoft.Compute/virtualMachines', variables('dsvmName'))]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines', variables('dsvmName'))]"
+            ]
+        }
+    ]
+}
