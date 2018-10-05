@@ -1,7 +1,5 @@
-#!/bin/bash
-
-DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-source $DIR/initvars.sh
+# This file is meant to be sourced as it only init variable values
+# usage: source initvars.sh
 
 #login to azure using your credentials
 az account show 1> /dev/null
@@ -57,26 +55,3 @@ deploymentName="setup_starting_`date +%y%m%d_%HH%MM%SS.%N`"
 
 #Start deployment
 echo "Starting deployment \"$deploymentName\" ..."
-
-az group deployment create --name "$deploymentName" --resource-group "$rg" \
-	--template-file "$DIR/template.json" \
-	--parameters uniquesuffix="$suffix" \
-	--parameters tshirtSize="$dsvmSize" \
-	--parameters location="$location" \
-	--parameters vNetIpRange="$vNetIpRange" \
-	--parameters defaultSubnetIpRange="$defaultSubnetIpRange" \
-	--parameters idsvmSubnetIpRange="$idsvmSubnetIpRange" \
-	--parameters dsvmAdminUsername="$adminUsername" \
-	--parameters dsvmAdminPassword="$adminPassword" \
-	--parameters artifactsPrefix="$artifactsPrefix" \
-	--parameters artifactsSuffix="$artifactsSuffix"
-
-if [ $?  == 0 ];
-then
-	echo "Template has been successfully deployed"
-else
-	echo "Template was NOT successfully deployed"
-	exit 1
-fi
-
-echo "you should be able to ssh to ${adminUsername}@${dsvmUrl}"
